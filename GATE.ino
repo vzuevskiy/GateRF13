@@ -16,7 +16,11 @@ EthernetUDP udp;
 EthernetClient client;
 IPAddress server;
 unsigned long uidDec, uidDecTemp;  // для храниения номера метки в десятичном формате
+unsigned long lastAttemptTime = 0;
+const unsigned long updateInterval = 60*1000;
 int btnState = 0;                  // Состояние кнопки, 1 когда нажата
+String incomingString;
+
 
 void initializePins() {
   pinMode(RelayPin, OUTPUT);
@@ -66,22 +70,39 @@ bool compareUID(unsigned long UID) {
 }
 
 void updUIDs() {
-  /*
-     Если в EEPROM пусто - подгрузить ключи из БД
-
-  */
-  unsigned long countUIDs;
-  EEPROM_read(0, countUIDs);
-  if (countUIDs == 0) {
+  unsigned long countUIDs, fromEEPROM;
+  
     if (client.connect(server, 7364)) {
       client.print("GATE,");
       client.println("UPD");
+    }   
+    
+    if(client.connected()){
+       int i=1;
+       while(client.available() > 0){
+         char incomingChar = client.read();
+       
+         if(incomingChar == '\n'){
+           EEPROM_read(i, fromEEPROM);
+           if(fromEEPROM == incomingString.toInt()){
+             incomingString == "";
+           }else{
+             EEPROM_write(i,incomingString.toInt());
+             incomingString == "";
+           }
+         }else{
+           incomingString += incomingChar;
+         }  
+         i++;
+       }
+       EEPROM_read(0, fromEEPROM);
+       if(i != fromEEPROM){
+         EEPROM_write(0,i);
+       }
+         
+     }
       client.stop();
-    } else {
-      Serial.println("connection failed");
-    }
-  }
-
+      lastAttemptTime = millis();
 }
 
 void setup() {
@@ -90,8 +111,7 @@ void setup() {
   SPI.begin();      // Init SPI bus
   mfrc522.PCD_Init();   // Init MFRC522
   initializeEthernet();
-  
-
+  updUIDs();
 }
 
 void loop() {
@@ -122,7 +142,10 @@ void loop() {
     // return;
   }
   
-  if
+  if(millis()-lastAttemptTime > updateInterval){
+    updUIDs();
+  }
+  
   
 }
 
