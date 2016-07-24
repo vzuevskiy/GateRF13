@@ -19,6 +19,7 @@ unsigned long uidDec, uidDecTemp;  // для храниения номера м�
 unsigned long lastAttemptTime = 0;
 const unsigned long updateInterval = 60*1000;
 int btnState = 0;                  // Состояние кнопки, 1 когда нажата
+bool UIDStatus=0;
 String incomingString;
 
 
@@ -105,6 +106,17 @@ void updUIDs() {
       lastAttemptTime = millis();
 }
 
+void sendNewUID(unsigned long UID){
+    if (client.connect(server, 7462)) {
+      client.print("GATE,");
+      client.print("NEW,");
+      client.println(uidDec);
+      client.stop();
+    } else {
+      Serial.println("connection failed");
+    }
+}
+
 void setup() {
   Serial.begin(9600);
   initializePins();
@@ -115,7 +127,9 @@ void setup() {
 }
 
 void loop() {
-
+  
+  btnState = digitalRead(btnPin);
+  
   if (mfrc522.PICC_IsNewCardPresent() 
       && mfrc522.PICC_ReadCardSerial()) // Если найдена новая RFID метка и считан UID
   {
@@ -131,12 +145,14 @@ void loop() {
     if (compareUID(uidDec)) // Сравниваем Uid метки, если он равен заданному то открываем.
     {
       openDoor(0);
+    } else if (!UIDStatus && btnState){
+      sendNewUID(uidDec);
     }
     mfrc522.PICC_HaltA();
     // return;
   }
 
-  btnState = digitalRead(btnPin);
+  
   if (btnState) {   // Если нажата кнопка выхода
     openDoor(1);
     // return;
