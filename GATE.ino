@@ -18,8 +18,8 @@ IPAddress server;
 unsigned long uidDec, uidDecTemp;  // для храниения номера метки в десятичном формате
 unsigned long lastAttemptTime = 0;
 const unsigned long updateInterval = 60*1000;
-int btnState = 0;                  // Состояние кнопки, 1 когда нажата
-bool UIDStatus=0;
+bool btnState = 0;                  // Состояние кнопки, 1 когда нажата
+bool UIDStatus = 0;
 String incomingString;
 
 
@@ -117,6 +117,18 @@ void sendNewUID(unsigned long UID){
     }
 }
 
+bool chkBtn(){
+  if (digitalRead(btnPin)){
+    delay(50);
+    if (digitalRead(btnPin)){
+    //  do{
+    //  }while(digitalRead(btnPin));
+      return 1;
+    }
+  }
+  return 0;
+}
+
 void setup() {
   Serial.begin(9600);
   initializePins();
@@ -128,7 +140,7 @@ void setup() {
 
 void loop() {
   
-  btnState = digitalRead(btnPin);
+  btnState = chkBtn();
   
   if (mfrc522.PICC_IsNewCardPresent() 
       && mfrc522.PICC_ReadCardSerial()) // Если найдена новая RFID метка и считан UID
