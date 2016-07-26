@@ -19,7 +19,7 @@ unsigned long uidDec, uidDecTemp;  // для храниения номера м�
 unsigned long lastAttemptTime = 0;
 const unsigned long updateInterval = 60*1000;
 bool btnState = 0;                  // Состояние кнопки, 1 когда нажата
-bool UIDStatus = 0;
+bool MasterUID = 0;
 String incomingString;
 
 
@@ -42,20 +42,48 @@ void openDoor(byte inside) {
      inside=0 открытие по ключу
      inside=1 открытие по кнопке изнутри
   */
-  digitalWrite(RelayPin, 0);
-  int opentime = millis();
+  int opentime = 0;
   if (inside == 0) {
     if (client.connect(server, 7462)) {
       client.print("GATE,");
       client.print("INSIDE,");
       client.println(uidDec);
-      client.stop();
+      if(!MasterUID)){           // ждем разрешения, если не мастер ключ
+        while(client.available() > 0){
+          char incomingChar = client.read();
+          if(incomingChar == '\n'){
+            if(incomingString == "GATE,INSIDE,ALLOW"){
+               digitalWrite(RelayPin, 0); // размыкаем релешку
+               opentime = millis();
+               client.stop();
+            } else if(incomingString == "GATE,INSIDE,DENIED"){
+               // какое-нибудь действие если не разрешен вход
+            }
+            incomingString == "";
+          } else {
+               incomingString += incomingChar;
+          }  
+        }
+      } else {
+        digitalWrite(RelayPin, 0); // размыкаем релешку
+        opentime = millis();
+        client.stop();
+      }
     } else {
       Serial.println("connection failed");
+      if(MasterUID)){
+        digitalWrite(RelayPin, 0); // размыкаем релешку
+        opentime = millis();
+      }
     }
+  } else {
+    // если открывают изнутри кнопкой
+    opentime = millis();
+    digitalWrite(RelayPin, 0); // замыкаем релешку
   }
+  
   while ((millis() - opentime) < 5000);
-  digitalWrite(RelayPin, 1);
+  digitalWrite(RelayPin, 1); // замыкаем релешку
 }
 
 bool compareUID(unsigned long UID) {
@@ -71,6 +99,7 @@ bool compareUID(unsigned long UID) {
 }
 
 void updUIDs() {
+  // В EEPROM храним MASTER ключи
   unsigned long countUIDs, fromEEPROM;
   
     if (client.connect(server, 7364)) {
@@ -146,7 +175,6 @@ void loop() {
       && mfrc522.PICC_ReadCardSerial()) // Если найдена новая RFID метка и считан UID
   {
     uidDec = 0;
-    // Выдача серийного номера метки.
     for (byte i = 0; i < mfrc522.uid.size; i++)
     {
       uidDecTemp = mfrc522.uid.uidByte[i];
@@ -154,20 +182,18 @@ void loop() {
     }
     Serial.println("Card UID: ");
     Serial.println(uidDec); // Выводим UID метки в консоль.
-    if (compareUID(uidDec)) // Сравниваем Uid метки, если он равен заданному то открываем.
-    {
-      openDoor(0);
-    } else if (!UIDStatus && btnState){
+    MasterUID = compareUID(uidDec);
+    openDoor(0);
+    
+   if (!MasterUID && btnState){
       sendNewUID(uidDec);
     }
     mfrc522.PICC_HaltA();
-    // return;
   }
 
-  
+
   if (btnState) {   // Если нажата кнопка выхода
     openDoor(1);
-    // return;
   }
   
   if(millis()-lastAttemptTime > updateInterval){
